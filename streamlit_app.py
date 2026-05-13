@@ -15,11 +15,6 @@ st.write("Generative AI music has been infecting music platforms. As a way to di
 "detect the difference between the two. However, the model is admittedly not the greatest."
 )
 
-# add a button to upload the image file from user
-uploaded_file = st.file_uploader("Choose an audio file you want to analyze...", type = ["wav", "mp3"])
-
-st.write("Based on the file you uploaded, the AI music detector has labeled this as.")
-
 # ====== AUDIOCNN CLASS DEFINTIION ======
 class AudioCNN(nn.Module):
     def __init__(self):
@@ -87,31 +82,43 @@ def load_my_model():
 loaded_model = load_my_model()
 
 # ====== RUN FILE THROUGH MODEL ======
-if uploaded_file is not None:
-    # We display the audio player
-    file_type = "audio/wav" if uploaded_file.name.endswith("wav") else "audio/mpeg"
-    st.audio(uploaded_file, format=file_type)
-    
-    if st.button("Analyze Audio"):
-        with st.spinner("Analyzing audio..."):
-            uploaded_file.seek(0) 
-            input_tensor = preprocess_audio(uploaded_file)
+# 1. Update the uploader to accept multiple files
+uploaded_files = st.file_uploader(
+    "Choose audio files you want to analyze...", 
+    type=["wav", "mp3"], 
+    accept_multiple_files=True
+)
 
+if uploaded_files: 
+    st.write(f"Analyzing {len(uploaded_files)} files...")
+    
+    results_data = []
+
+    for uploaded_file in uploaded_files:
+        uploaded_file.seek(0)
+        
+        with st.spinner(f"Analyzing {uploaded_file.name}..."):
+            input_tensor = preprocess_audio(uploaded_file)
+            
             with torch.no_grad():
                 logits = loaded_model(input_tensor)
-                
-                probabilities = F.softmax(logits, dim=1)
-                
+                probabilities = torch.nn.functional.softmax(logits, dim=1)
                 confidence, prediction = torch.max(probabilities, dim=1)
-                
-                conf_score = confidence.item() * 100  
-                pred_idx = prediction.item()
-
-            label_map = {0: "Human-Created", 1: "AI-Generated"}
-            result = label_map.get(pred_idx, "Unknown")
-
-            color = "green" if pred_idx == 0 else "red"
             
-            st.markdown(f"### Result: :{color}[{result}]")
-            st.progress(conf_score / 100)
-            st.write(f"**Confidence Score:** {conf_score:.2f}%")
+            label_map = {0: "Human-Created", 1: "AI-Generated"}
+            result = label_map.get(prediction.item(), "Unknown")
+            score = f"{confidence.item() * 100:.2f}%"
+            
+            results_data.append({
+                "File Name": uploaded_file.name,
+                "Prediction": result,
+                "Confidence": score
+            })
+
+    st.subheader("Batch Results")
+    st.table(results_data)
+
+    with st.expander("Listen to uploaded files"):
+        for uploaded_file in uploaded_files:
+            st.write(f"File: {uploaded_file.name}")
+            st.audio(uploaded_file)

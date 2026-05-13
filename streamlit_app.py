@@ -1,6 +1,8 @@
 import streamlit as st
 import torch
 import torch.nn as nn
+import librosa
+import numpy as np
 
 # run app command: streamlit run streamlit_app.py --server.enableCORS false --server.enableXsrfProtection false
 
@@ -14,7 +16,7 @@ uploaded_file = st.file_uploader("Choose an audio file you want to analyze...", 
 
 st.write("Based on the file you uploaded, the AI music detector has labeled this as.")
 
-# AUDIO CNN STUFF
+# ====== AUDIO CNN CLASS ======
 
 class AudioCNN(nn.Module):
     def __init__(self):
@@ -29,11 +31,8 @@ class AudioCNN(nn.Module):
         self.conv3 = nn.Conv2d(64, 128, kernel_size = 3, padding = 1)
         self.bn3 = nn.BatchNorm2d(128)
 
-        # Increased pooling size to capture more detail
         self.avg_pool = nn.AdaptiveAvgPool2d((4, 4))
 
-        # Updated input size: 128 filters * 4 * 4 pooling = 2048
-        # Increased hidden units to 512 to widen the bottleneck
         self.fc1 = nn.Linear(128 * 4 * 4, 512)
         self.dropout = nn.Dropout(0.5)
         self.fc2 = nn.Linear(512, 2)
@@ -49,10 +48,10 @@ class AudioCNN(nn.Module):
         x = self.fc2(x)
         return x
 
-model = AudioCNN().to()
-
+# ====== LOAD THE MODEL ======
 loaded_model = AudioCNN()
-loaded_model.load_state_dict(torch.load("/content/REPLACE.pth", map_location=torch.device('cpu')))
+loaded_model.load_state_dict(torch.load("/workspaces/ai-music-detection/CONVERGED_BASELINE_NONOISE_SPECT_10SEC_CONV1D_94.4.pth", map_location=torch.device('cpu')))
 
-# Set the model to evaluation mode
 loaded_model.eval()
+
+# 

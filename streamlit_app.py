@@ -4,6 +4,7 @@ import torch.nn as nn
 import librosa
 import torchaudio
 import numpy as np
+import os
 
 # run app command: streamlit run streamlit_app.py --server.enableCORS false --server.enableXsrfProtection false
 
@@ -70,6 +71,12 @@ def preprocess_audio(file, duration = 5, sr = 22050):
     spectrogram = spectrogram.unsqueeze(0)
 
     return spectrogram
+
+
+# ====== WORKING DIR ======
+current_dir = os.path.dirname(__file__)
+model_path = os.path.join(current_dir, "CONVERGED_conv2d3_88.pth")
+
 
 # ====== LOAD THE MODEL ======
 loaded_model = AudioCNN()

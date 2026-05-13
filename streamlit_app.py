@@ -1,8 +1,8 @@
 import streamlit as st
 import torch
 import torch.nn as nn
-import torchaudio
 import librosa
+import torchaudio
 import numpy as np
 
 # run app command: streamlit run streamlit_app.py --server.enableCORS false --server.enableXsrfProtection false

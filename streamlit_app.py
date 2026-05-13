@@ -1,6 +1,7 @@
 import streamlit as st
 import torch
 import torch.nn as nn
+import torchaudio
 import librosa
 import numpy as np
 
@@ -16,8 +17,7 @@ uploaded_file = st.file_uploader("Choose an audio file you want to analyze...", 
 
 st.write("Based on the file you uploaded, the AI music detector has labeled this as.")
 
-# ====== AUDIO CNN CLASS ======
-
+# ====== AUDIOCNN CLASS DEFINTIION ======
 class AudioCNN(nn.Module):
     def __init__(self):
         super(AudioCNN, self).__init__()
@@ -47,6 +47,11 @@ class AudioCNN(nn.Module):
         x = self.dropout(x)
         x = self.fc2(x)
         return x
+
+# ====== PREPROCESS THE UPLOADED FILE ======
+def preprocess_audio(file, duration = 5, sr = 22050): 
+
+
 
 # ====== LOAD THE MODEL ======
 loaded_model = AudioCNN()

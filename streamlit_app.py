@@ -49,7 +49,7 @@ class AudioCNN(nn.Module):
         x = self.fc2(x)
         return x
 
-model = AudioCNN().to(device)
+model = AudioCNN().to()
 
 loaded_model = AudioCNN()
 loaded_model.load_state_dict(torch.load("/content/REPLACE.pth", map_location=torch.device('cpu')))

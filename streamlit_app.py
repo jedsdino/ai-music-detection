@@ -80,7 +80,9 @@ model_path = os.path.join(current_dir, "CONVERGED_conv2d3_88.pth")
 
 # ====== LOAD THE MODEL ======
 loaded_model = AudioCNN()
-loaded_model.load_state_dict(model_path, map_location=torch.device('cpu'))
+loaded_model.load_state_dict(
+    torch.load(model_path, map_location=torch.device('cpu'))
+    )
 
 loaded_model.eval()
 

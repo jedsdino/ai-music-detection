@@ -54,23 +54,17 @@ class AudioCNN(nn.Module):
 
 # ====== PREPROCESS THE UPLOADED FILE ======
 def preprocess_audio(file, duration = 5, sr = 22050): 
-    waveform, original_sr = torchaudio.load(file)
-
-    if original_sr != sr:
-        resampler = torchaudio.transforms.Resample(original_sr, sr)
-        waveform = resampler(waveform)
-
-    if waveform.shape[0] > 1:
-        waveform = torch.mean(waveform, dim=0, keepdim=True)
+    y, _ = librosa.load(uploaded_file, sr = sr, duration = duration, mono = True)
 
     target_samples = sr * duration
-    if waveform.shape[1] < target_samples:
-        padding = target_samples - waveform.shape[1]
-        waveform = torch.nn.functional.pad(waveform, (0, padding))
+    if len(y) < target_samples:
+        y = np.pad(y, (0, target_samples - len(y)))
     else:
-        waveform = waveform[:, target_samples]
+        y = y[:target_samples]
 
-    spectrogram_transform = torchaudio.transforms.Spectrogram(n_fft = 400, power = 2)
+    waveform = torch.from_numpy(y).unsqueeze(0)
+
+    spectrogram_transform = torchaudio.transforms.Spectrogram(power = 2)
     spectrogram = spectrogram_transform(waveform)
 
     spectrogram = spectrogram.unsqueeze(0)

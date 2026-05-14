@@ -152,5 +152,13 @@ if uploaded_files:
 st.title("How Does This Work?")
 st.write("Some convolutional neural networks")
 
-st.image("/workspaces/ai-music-detection/fma_spect.png")
-st.image("/workspaces/ai-music-detection/sonics_spect.png")
+# ====== DISPLAY SPECTS ======
+current_dir = os.path.dirname(__file__)
+
+# FMA
+fma_spect_path = os.path.join(current_dir, "fma_spect.png")
+st.image(fma_spect_path)
+
+# SONICS
+sonics_spect_path = os.path.join(current_dir, "sonics_spect.png")
+st.image(sonics_spect_path)

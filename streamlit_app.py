@@ -132,21 +132,24 @@ if uploaded_files:
 
     st.subheader(f"Spectrogram for {selected_filename}")
 
-    # 1. Convert the tensor back to a numpy array
-    # We need to remove the batch and channel dimensions for plotting
-    # input_tensor shape is [1, 1, freq, time] -> we want [freq, time]
+        # 1. Prepare the tensor for visualization
+        # We want to use the log scale just like your training examples
     spec_np = input_tensor.squeeze().numpy()
+        
+        # We use log10 to match your example logic: ex_fma_spectrogram.log10()
+        # Adding a tiny epsilon (1e-10) prevents taking log of zero
+    log_spec = np.log10(spec_np + 1e-10)
 
-    # 2. Convert power to decibels (log scale) for better visualization
-    spec_db = librosa.power_to_db(spec_np, ref=np.max)
-
-    # 3. Create the plot
-    fig, ax = plt.subplots()
-    img = librosa.display.specshow(spec_db, sr=22050, x_axis='time', y_axis='hz', ax=ax)
+        # 2. Create the plot using imshow to match your notebook style
+    fig, ax = plt.subplots(figsize=(10, 4))
+    img = ax.imshow(log_spec, aspect='auto', origin='lower', cmap='viridis')
+        
     fig.colorbar(img, ax=ax, format="%+2.0f dB")
-    ax.set(title='Mel-frequency spectrogram')
+    ax.set_title('Power Spectrogram (Log Scale)')
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Frequency Bin')
 
-    # 4. Display in Streamlit
+        # 3. Display in Streamlit
     st.pyplot(fig)
 
 st.title("How Does This Work?")

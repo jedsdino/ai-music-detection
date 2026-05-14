@@ -2,13 +2,15 @@ import streamlit as st
 import torch
 import torch.nn as nn
 import librosa
+import librosa.display
 import torchaudio
 import numpy as np
 import os
 import io
+import matplotlib.pyplot as plt
 import torch.nn.functional as F
 
-# run app command: streamlit run streamlit_app.py --server.enableCORS false --server.enableXsrfProtection false
+# ====== WEBSITE TITLE/HEADING ======
 
 st.title("AI Music Detection Application")
 st.write("Generative AI music has been infecting music platforms. As a way to differentiate between AI music and human-created music, I trained a convolutional neural network to " \
@@ -51,8 +53,9 @@ class AudioCNN(nn.Module):
 
 
 # ====== PREPROCESS THE UPLOADED FILE ======
-def preprocess_audio(file, duration = 5, sr = 22050): 
-    y, _ = librosa.load(uploaded_file, sr = sr, duration = duration, mono = True)
+@st.cache_data
+def preprocess_audio(file_content, duration = 5, sr = 22050): 
+    y, _ = librosa.load(io.BytesIO(file_content), sr = sr, duration = duration, mono = True)
 
     target_samples = sr * duration
     if len(y) < target_samples:
@@ -90,35 +93,64 @@ uploaded_files = st.file_uploader(
 )
 
 if uploaded_files: 
-    st.write(f"Analyzing {len(uploaded_files)} files...")
+    # 1. Create a list of file names for the dropdown
+    file_names = [f.name for f in uploaded_files]
     
-    results_data = []
+    # 2. Add the selection widget
+    selected_filename = st.selectbox("Select a file to analyze and play:", file_names)
 
-    for uploaded_file in uploaded_files:
-        uploaded_file.seek(0)
+    # 3. Find the file object that matches the selection
+    # (Next, we find the specific file object in our list that matches the selected name)
+    selected_file = next(f for f in uploaded_files if f.name == selected_filename)
+
+    st.write(f"Analyzing: **{selected_file.name}**")
+    
+    # Reset file pointer to ensure it reads from the start
+    selected_file.seek(0)
+
+    with st.spinner(f"Processing {selected_file.name}..."):
+        # We pass the bytes to our (ideally) cached function
+        input_tensor = preprocess_audio(selected_file.getvalue())
         
-        with st.spinner(f"Analyzing {uploaded_file.name}..."):
-            input_tensor = preprocess_audio(uploaded_file)
-            
-            with torch.no_grad():
-                logits = loaded_model(input_tensor)
-                probabilities = torch.nn.functional.softmax(logits, dim=1)
-                confidence, prediction = torch.max(probabilities, dim=1)
-            
-            label_map = {0: "Human-Created", 1: "AI-Generated"}
-            result = label_map.get(prediction.item(), "Unknown")
-            score = f"{confidence.item() * 100:.2f}%"
-            
-            results_data.append({
-                "File Name": uploaded_file.name,
-                "Prediction": result,
-                "Confidence": score
-            })
+        with torch.no_grad():
+            logits = loaded_model(input_tensor)
+            probabilities = F.softmax(logits, dim=1)
+            confidence, prediction = torch.max(probabilities, dim=1)
+        
+        label_map = {0: "Human-Created", 1: "AI-Generated"}
+        result = label_map.get(prediction.item(), "Unknown")
 
-    st.subheader("Batch Results")
-    st.table(results_data)
+    # 4. Display results for just the selected file
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Prediction", result)
+    with col2:
+        st.metric("Confidence", f"{confidence.item() * 100:.2f}%")
 
-    with st.expander("Listen to uploaded files"):
-        for uploaded_file in uploaded_files:
-            st.write(f"File: {uploaded_file.name}")
-            st.audio(uploaded_file)
+    # 5. Audio Player for the selection
+    st.audio(selected_file)
+
+    st.subheader(f"Spectrogram for {selected_filename}")
+
+    # 1. Convert the tensor back to a numpy array
+    # We need to remove the batch and channel dimensions for plotting
+    # input_tensor shape is [1, 1, freq, time] -> we want [freq, time]
+    spec_np = input_tensor.squeeze().numpy()
+
+    # 2. Convert power to decibels (log scale) for better visualization
+    spec_db = librosa.power_to_db(spec_np, ref=np.max)
+
+    # 3. Create the plot
+    fig, ax = plt.subplots()
+    img = librosa.display.specshow(spec_db, sr=22050, x_axis='time', y_axis='hz', ax=ax)
+    fig.colorbar(img, ax=ax, format="%+2.0f dB")
+    ax.set(title='Mel-frequency spectrogram')
+
+    # 4. Display in Streamlit
+    st.pyplot(fig)
+
+st.title("How Does This Work?")
+st.write("Some convolutional neural networks")
+
+st.image("/workspaces/ai-music-detection/fma_spect.png")
+st.image("/workspaces/ai-music-detection/sonics_spect.png")

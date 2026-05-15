@@ -1,10 +1,10 @@
 import streamlit as st
 import torch
 import torch.nn as nn
-import librosa
-import librosa.display
 import torchaudio
+import librosa
 import numpy as np
+import random
 import os
 import io
 import matplotlib.pyplot as plt
@@ -21,21 +21,21 @@ st.write("Generative AI music has been infecting music platforms. As a way to di
 class AudioCNN(nn.Module):
     def __init__(self):
         super(AudioCNN, self).__init__()
+
+        # BLOCK 1
         self.conv1 = nn.Conv2d(1, 32, kernel_size = 3, padding = 1)
         self.bn1 = nn.BatchNorm2d(32)
         self.pool = nn.MaxPool2d(2)
 
+        # BLOCK 2
         self.conv2 = nn.Conv2d(32, 64, kernel_size = 3, padding = 1)
         self.bn2 = nn.BatchNorm2d(64)
 
+        # BLOCK 3
         self.conv3 = nn.Conv2d(64, 128, kernel_size = 3, padding = 1)
         self.bn3 = nn.BatchNorm2d(128)
 
-        # Increased pooling size to capture more detail
         self.avg_pool = nn.AdaptiveAvgPool2d((4, 4))
-
-        # Updated input size: 128 filters * 4 * 4 pooling = 2048
-        # Increased hidden units to 512 to widen the bottleneck
         self.fc1 = nn.Linear(128 * 4 * 4, 512)
         self.dropout = nn.Dropout(0.5)
         self.fc2 = nn.Linear(512, 2)
@@ -54,9 +54,22 @@ class AudioCNN(nn.Module):
 
 # ====== PREPROCESS THE UPLOADED FILE ======
 @st.cache_data
-def preprocess_audio(file_content, duration = 5, sr = 22050): 
-    y, _ = librosa.load(io.BytesIO(file_content), sr = sr, duration = duration, mono = True)
+def preprocess_audio(file_content, duration=5, sr=22050):
+    temp_file = io.BytesIO(file_content)
+    total_duration = librosa.get_duration(path=temp_file)
+    
+    # 2. random start
+    if total_duration > duration:
+        max_start = total_duration - duration
+        start_time = random.uniform(0, max_start)
+    else:
+        start_time = 0  # start at 0 if 5 seconds
 
+    # load five seconds
+    temp_file.seek(0)
+    y, _ = librosa.load(temp_file, sr=sr, offset=start_time, duration=duration, mono=True)
+
+    # pad
     target_samples = sr * duration
     if len(y) < target_samples:
         y = np.pad(y, (0, target_samples - len(y)))
@@ -64,19 +77,18 @@ def preprocess_audio(file_content, duration = 5, sr = 22050):
         y = y[:target_samples]
 
     waveform = torch.from_numpy(y).unsqueeze(0)
-
-    spectrogram_transform = torchaudio.transforms.Spectrogram(power = 2)
+    spectrogram_transform = torchaudio.transforms.Spectrogram(power=2)
     spectrogram = spectrogram_transform(waveform)
-
     spectrogram = spectrogram.unsqueeze(0)
 
-    return spectrogram
+    # return spect and start time
+    return spectrogram, start_time
 
 # ====== LOAD THE MODEL ======
 @st.cache_resource
 def load_my_model():
     current_dir = os.path.dirname(__file__)
-    model_path = os.path.join(current_dir, "CONVERGED_conv2d3_88.pth")
+    model_path = os.path.join(current_dir, "FINAL_AI_MUSIC_DETECTOR.pth")
     model = AudioCNN()
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     model.eval()
@@ -85,7 +97,7 @@ def load_my_model():
 loaded_model = load_my_model()
 
 # ====== RUN FILE THROUGH MODEL ======
-# 1. Update the uploader to accept multiple files
+# update the uploader to accept multiple files
 uploaded_files = st.file_uploader(
     "Choose audio files you want to analyze...", 
     type=["wav", "mp3"], 
@@ -93,24 +105,22 @@ uploaded_files = st.file_uploader(
 )
 
 if uploaded_files: 
-    # 1. Create a list of file names for the dropdown
+    # list of files
     file_names = [f.name for f in uploaded_files]
     
-    # 2. Add the selection widget
+    # select
     selected_filename = st.selectbox("Select a file to analyze and play:", file_names)
 
-    # 3. Find the file object that matches the selection
-    # (Next, we find the specific file object in our list that matches the selected name)
+    # find file + selection
     selected_file = next(f for f in uploaded_files if f.name == selected_filename)
 
     st.write(f"Analyzing: **{selected_file.name}**")
     
-    # Reset file pointer to ensure it reads from the start
+    # reset
     selected_file.seek(0)
 
     with st.spinner(f"Processing {selected_file.name}..."):
-        # We pass the bytes to our (ideally) cached function
-        input_tensor = preprocess_audio(selected_file.getvalue())
+        input_tensor, start_timestamp = preprocess_audio(selected_file.getvalue())        
         
         with torch.no_grad():
             logits = loaded_model(input_tensor)
@@ -120,27 +130,26 @@ if uploaded_files:
         label_map = {0: "Human-Created", 1: "AI-Generated"}
         result = label_map.get(prediction.item(), "Unknown")
 
-    # 4. Display results for just the selected file
+    st.info(f"Analyzed a 5-second segment starting at **{start_timestamp:.2f}s**")
+
+    # display results
     col1, col2 = st.columns(2)
     with col1:
         st.metric("Prediction", result)
     with col2:
         st.metric("Confidence", f"{confidence.item() * 100:.2f}%")
 
-    # 5. Audio Player for the selection
+    # 5. audio player
     st.audio(selected_file)
 
     st.subheader(f"Spectrogram for {selected_filename}")
 
-        # 1. Prepare the tensor for visualization
-        # We want to use the log scale just like your training examples
     spec_np = input_tensor.squeeze().numpy()
         
-        # We use log10 to match your example logic: ex_fma_spectrogram.log10()
-        # Adding a tiny epsilon (1e-10) prevents taking log of zero
+        # transform
     log_spec = np.log10(spec_np + 1e-10)
 
-        # 2. Create the plot using imshow to match your notebook style
+        # plot
     fig, ax = plt.subplots(figsize=(10, 4))
     img = ax.imshow(log_spec, aspect='auto', origin='lower', cmap='viridis')
         
@@ -149,7 +158,7 @@ if uploaded_files:
     ax.set_xlabel('Time')
     ax.set_ylabel('Frequency Bin')
 
-        # 3. Display in Streamlit
+        # display
     st.pyplot(fig)
 
 st.title("How Does This Work?")
@@ -159,9 +168,13 @@ st.write("Some convolutional neural networks")
 current_dir = os.path.dirname(__file__)
 
 # FMA
+fma_audio_path = os.path.join(current_dir, "02 - Frenic - Ulan Bator.wav")
+st.audio(fma_audio_path)
 fma_spect_path = os.path.join(current_dir, "fma_spect.png")
 st.image(fma_spect_path)
 
 # SONICS
+sonics_audio_path = os.path.join(current_dir, "00 - sonics_subset - fake 15114 udio 1.wav")
+st.audio(sonics_audio_path)
 sonics_spect_path = os.path.join(current_dir, "sonics_spect.png")
 st.image(sonics_spect_path)
